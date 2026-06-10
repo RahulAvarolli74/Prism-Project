@@ -1,0 +1,14 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+--find-links https://data.pyg.org/whl/torch-2.5.1+cpu.html
+
+fastapi==0.115.6
+python-multipart==0.0.20
+uvicorn[standard]==0.34.0
+numpy==1.26.4
+pandas==2.2.3
+torch==2.5.1+cpu
+torch-geometric==2.6.1
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv

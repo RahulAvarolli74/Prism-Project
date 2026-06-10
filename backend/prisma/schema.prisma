@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Service Registry
+// ============================================
+model Service {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  metadata  Json?    // Flexible JSONB for extra service info (version, team, region, etc.)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  telemetry             Telemetry[]
+  sourceDependencies    ServiceDependency[] @relation("SourceDependencies")
+  targetDependencies    ServiceDependency[] @relation("TargetDependencies")
+
+  @@map("services")
+  @@index([name])
+}
+
+// ============================================
+// Telemetry Data (Metrics, Logs, Traces)
+// ============================================
+model Telemetry {
+  id        String   @id @default(uuid())
+  serviceId String   @map("service_id")
+  timestamp DateTime
+  metrics   Json     // JSONB — cpu, memory, latency, error_rate, custom metrics
+  logs      Json?    // JSONB — array of log strings
+  trace     Json?    // JSONB — trace_id, parent_service, depth
+  rawData   Json?    @map("raw_data") // Original unprocessed payload for audit
+
+  service     Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  predictions Prediction[]
+
+  @@map("telemetry")
+  @@index([serviceId])
+  @@index([timestamp])
+  @@index([serviceId, timestamp])
+}
+
+// ============================================
+// ML Predictions
+// ============================================
+model Prediction {
+  id           String   @id @default(uuid())
+  telemetryId  String   @map("telemetry_id")
+  failure      Boolean
+  confidence   Float
+  affectedNode String?  @map("affected_node")
+  rootCause    String?  @map("root_cause")
+  features     Json?    // Feature vector sent to ML model
+  metadata     Json?    // Additional prediction metadata (model version, latency, etc.)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  telemetry Telemetry @relation(fields: [telemetryId], references: [id], onDelete: Cascade)
+
+  @@map("predictions")
+  @@index([telemetryId])
+  @@index([failure])
+  @@index([createdAt])
+  @@index([affectedNode])
+}
+
+// ============================================
+// Service Dependency Graph
+// ============================================
+model ServiceDependency {
+  id              String @id @default(uuid())
+  sourceServiceId String @map("source_service_id")
+  targetServiceId String @map("target_service_id")
+  metadata        Json?  // Dependency metadata (protocol, latency baseline, etc.)
+
+  sourceService Service @relation("SourceDependencies", fields: [sourceServiceId], references: [id], onDelete: Cascade)
+  targetService Service @relation("TargetDependencies", fields: [targetServiceId], references: [id], onDelete: Cascade)
+
+  @@map("service_dependencies")
+  @@unique([sourceServiceId, targetServiceId])
+  @@index([sourceServiceId])
+  @@index([targetServiceId])
+}

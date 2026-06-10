@@ -1,0 +1,220 @@
+services:
+  # ═══════════════════════════════════════════════════
+  # PostgreSQL Database
+  # ═══════════════════════════════════════════════════
+  database:
+    image: postgres:16-alpine
+    container_name: prism_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-prism_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # Redis (Optional - for caching)
+  # ═══════════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: prism_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # Backend API
+  # ═══════════════════════════════════════════════════
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: prism_backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@database:5432/${DB_NAME:-prism_db}
+      CORS_ORIGIN: http://localhost:3000
+      ML_SERVICE_URL: ${ML_SERVICE_URL:-http://ml-service:8000}
+      ML_SERVICE_TIMEOUT: 10000
+      ML_SERVICE_RETRIES: 3
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    depends_on:
+      database:
+        condition: service_healthy
+      ml-service:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - npx prisma db push --skip-generate && node src/server.js
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/logs:/app/logs
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ['CMD', 'node', '-e', "const http=require('http');const req=http.get('http://localhost:3001/health', (res) => {process.exit(res.statusCode === 200 ? 0 : 1);});req.on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # Python ML Service
+  # ═══════════════════════════════════════════════════
+  ml-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.ml
+    container_name: prism_ml_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/model:/app/model:ro
+      - ./backend/api:/app/api:ro
+      - ./backend/preprocessing:/app/preprocessing:ro
+      - ./backend/main.py:/app/main.py:ro
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # OpenTelemetry Collector
+  # ═══════════════════════════════════════════════════
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: prism_otel_collector
+    command: ['--config=/etc/otelcol/config.yaml']
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+    depends_on:
+      - backend
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # Frontend UI
+  # ═══════════════════════════════════════════════════
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:3001/api/v1
+        VITE_SOCKET_URL: http://localhost:3001
+    container_name: prism_frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:3001/api/v1
+      VITE_SOCKET_URL: http://localhost:3001
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ['CMD', 'node', '-e', "const http=require('http');const req=http.get('http://localhost:3000', (res) => {process.exit(res.statusCode === 200 ? 0 : 1);});req.on('error', () => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # Automatic Live Telemetry Generator
+  # ═══════════════════════════════════════════════════
+  data-generator:
+    image: node:20-alpine
+    container_name: prism_data_generator
+    working_dir: /app/backend
+    volumes:
+      - ./:/app
+    environment:
+      BACKEND_URL: http://backend:3001
+    depends_on:
+      - backend
+    command:
+      - sh
+      - -c
+      - |
+        until wget -qO- http://backend:3001/health > /dev/null; do
+          echo "[data-generator] waiting for backend health..."
+          sleep 3
+        done
+        echo "[data-generator] backend healthy, starting telemetry stream"
+        node scripts/testDirectTelemetry.js
+    restart: unless-stopped
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # Prometheus Monitoring
+  # ═══════════════════════════════════════════════════
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prism_prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+    networks:
+      - prism_network
+
+  # ═══════════════════════════════════════════════════
+  # Grafana Dashboard
+  # ═══════════════════════════════════════════════════
+  grafana:
+    image: grafana/grafana:latest
+    container_name: prism_grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: 'grafana-clock-panel'
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3002:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - prism_network
+
+networks:
+  prism_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

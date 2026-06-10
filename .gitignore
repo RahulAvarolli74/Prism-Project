@@ -1,0 +1,77 @@
+# -----------------------------
+# Repository-wide ignore rules
+# -----------------------------
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.temp
+.idea/
+.vscode/
+
+# Keep recommended VS Code extensions if you choose to add them later
+!.vscode/extensions.json
+
+# -----------------------------
+# Secrets / environment files
+# -----------------------------
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Keep example env files in git
+!.env.example
+!.env.*.example
+!**/.env.example
+!**/.env.*.example
+
+# -----------------------------
+# Node.js artifacts
+# -----------------------------
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# Build outputs and caches
+**/dist/
+**/build/
+**/.vite/
+**/.cache/
+**/.turbo/
+**/*.tsbuildinfo
+
+# Test / coverage artifacts
+**/coverage/
+**/.nyc_output/
+**/playwright-report/
+**/test-results/
+
+# Logs
+logs/
+*.log
+
+# Local runtime temp folders
+**/tmp/
+**/temp/
+
+# Prisma local sqlite files (safe to regenerate)
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# -----------------------------
+# Documentation files
+# -----------------------------
+# Ignore all markdown files by default
+**/*.md
+vit24cs04_docker.tar
+*.mp4
+*.tar
+
+# Keep the main project readme in git
+!README.md

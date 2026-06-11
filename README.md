@@ -161,50 +161,6 @@ node scripts/testDirectTelemetry.js 480 15000 payment window-failure
 | Latency | < 50ms per prediction |
 | Warm-up | Several windows required before stable predictions |
 
----
-
-## Project Structure
-
-```
-PrismSystem/
-|-- backend/
-|   |-- src/
-|   |   |-- modules/telemetry/     # OTEL routes, mappers, controllers
-|   |   |-- modules/prediction/    # ML integration and prediction logic
-|   |   |-- modules/dashboard/     # Dashboard data aggregation
-|   |   |-- modules/service/       # Service registry
-|   |   |-- pipeline/              # 4-stage processing pipeline
-|   |   |-- integrations/          # ML client, WebSocket, alerts
-|   |   |-- utils/                 # Logger, circuit breaker, metrics
-|   |   `-- app.js
-|   |-- model/                     # Trained PyTorch model
-|   |-- api/                       # ML service API layer
-|   |-- preprocessing/             # Feature engineering
-|   |-- scripts/                   # Test data generators
-|   |-- prisma/                    # Database schema
-|   |-- main.py                    # ML service entry (FastAPI)
-|   |-- Dockerfile                 # Backend image
-|   `-- Dockerfile.ml              # ML service image
-|
-|-- frontend/
-|   |-- src/
-|   |   |-- pages/                 # Dashboard, Alerts, Metrics, Timeline
-|   |   |-- components/            # Charts, UI, Layout
-|   |   |-- features/              # Dashboard panels, predictions
-|   |   |-- services/              # API and WebSocket clients
-|   |   |-- store/                 # Zustand state
-|   |   |-- hooks/                 # Custom hooks
-|   |   `-- utils/                 # Formatters, helpers
-|   |-- Dockerfile
-|   `-- vite.config.js
-|
-|-- docker-compose.yml             # All 9 services
-|-- otel-collector-config.yaml
-|-- prometheus.yml
-`-- .env.example
-```
-
----
 
 ## Environment Variables
 

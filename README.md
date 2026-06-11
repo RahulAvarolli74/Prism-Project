@@ -13,9 +13,7 @@ An end-to-end microservice observability platform with ML-powered anomaly detect
 
 ## Demo
 
-https://github.com/user-attachments/assets/REPLACE_THIS
-
-> Upload `demo.mp4` by dragging it into a GitHub Issue comment box. GitHub will generate a URL — paste it above, replacing `REPLACE_THIS`.
+https://github.com/RahulAvarolli74/Prism-Project/releases/download/v0.1.0/demo.mp4
 
 ---
 
